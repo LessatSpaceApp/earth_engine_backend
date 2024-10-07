@@ -91,6 +91,129 @@ async def generate_scatter_plot(request: AoiRequest):
     # Return the image as a response
     return FileResponse(plot_filename, media_type='image/png')
 
+# @app.post("/generate-map/")
+# async def generate_map(request: AoiRequest):
+#     aoi = ee.Geometry.Point([request.lon, request.lat])
+
+#     # Fetch Landsat 8 TOA images and filter by date and region
+#     landsat_collection = ee.ImageCollection('LANDSAT/LC08/C02/T1_TOA') \
+#         .filterDate(request.start_date, request.end_date) \
+#         .filterBounds(aoi)
+
+#     # Get the first image in the collection for visualization
+#     img = landsat_collection.first()
+
+#     # Get metadata from the first image
+#     img_info = img.getInfo()
+#     properties = img_info.get('properties', {})
+
+#     # Create a new dictionary without underscores in the keys
+#     cleaned_properties = {key.replace('_', ' '): value for key, value in properties.items()}
+
+#     # Save metadata to JSON file
+#     with open('static/metadata.json', 'w') as json_file:
+#         json.dump(cleaned_properties, json_file, indent=4)
+
+#     # Extract 5 key metadata items relevant to scientific analysis
+#     relevant_metadata = {
+#         'Cloud Coverage': properties.get('CLOUD_COVER', 'N/A'),
+#         'Sun Azimuth': properties.get('SUN_AZIMUTH', 'N/A'),
+#         'Sun Elevation': properties.get('SUN_ELEVATION', 'N/A'),
+#         'Earth-Sun Distance': properties.get('EARTH_SUN_DISTANCE', 'N/A'),
+#         'Sensor Angle': properties.get('SENSOR_AZIMUTH', 'N/A')
+#     }
+
+#     # Create a Folium map centered on the AOI
+#     map_center = [request.lat, request.lon]
+#     m = folium.Map(location=map_center, zoom_start=8)
+
+#     # Function to add Earth Engine image to folium map
+#     def add_ee_layer(image, vis_params, name):
+#         map_id_dict = ee.Image(image).getMapId(vis_params)
+#         folium.TileLayer(
+#             tiles=map_id_dict['tile_fetcher'].url_format,
+#             attr='Google Earth Engine',
+#             name=name,
+#             overlay=True,
+#             control=True
+#         ).add_to(m)
+
+#     # Experimenting with auto-scaling or setting reasonable min/max values
+#     vis_params = {
+#         'bands': ['B4', 'B3', 'B2'],  # RGB bands
+#         'min': 0,  # Adjusted to minimum reflectance values
+#         'max': 0.3,  # Adjusted for TOA reflectance images
+#         'gamma': 1.4
+#     }
+
+#     ## PIXEL FUNCTION IS 
+#     def create_pixel_image(pixel_value):
+#         # Create a new image with a single pixel
+#         pixel_img = ee.Image.constant(pixel_value).paint(ee.Geometry.Point([0, 0]), 1)
+
+#         # Define visualization parameters for the pixel image
+#         vis_params = {
+#             'bands': ['B4', 'B3', 'B2'],  # RGB bands
+#             'min': 0,
+#             'max': 1,
+#             'palette': ['blue', 'green', 'red']  # Adjust palette as needed
+#         }
+
+#         return pixel_img, vis_params
+    
+
+#     # Extract the pixel value at the center of the AOI (assuming 30m resolution)
+#     pixel_value = img.sample(ee.Geometry.Point([request.lon, request.lat])).first().get('B4')
+
+#     # Create the pixel image and visualization parameters
+#     pixel_img, vis_params = create_pixel_image(pixel_value)
+
+#     # Add the pixel image to the map
+#     add_ee_layer(pixel_img, vis_params, 'Pixel Image')
+
+
+#     # Add the Landsat image layer to the Folium map
+#     add_ee_layer(img, vis_params, 'Landsat 8 RGB')
+
+#     # Add the AOI to the map
+#     folium.Marker(location=[request.lat, request.lon], popup='AOI', icon=folium.Icon(color='red')).add_to(m)
+
+#     # Add relevant metadata as a popup on the map
+#     metadata_html = "<b>Landsat 8 Metadata<br>(Scientific Analysis):</b><br>"
+#     for key, value in relevant_metadata.items():
+#         metadata_html += f"{key}: {value}<br>"
+
+#     metadata_popup = folium.Popup(html=metadata_html, max_width=300)
+#     folium.Marker(location=map_center, popup=metadata_popup).add_to(m)
+
+#     # Add base layers for context with attribution
+#     folium.TileLayer(
+#         tiles='Stamen Terrain',
+#         attr='Map data © OpenStreetMap contributors, CC-BY-SA, Stamen Design',
+#         name='Stamen Terrain',
+#         overlay=False,
+#         control=True
+#     ).add_to(m)
+
+#     folium.TileLayer(
+#         tiles='Stamen Toner',
+#         attr='Map data © OpenStreetMap contributors, CC-BY-SA, Stamen Design',
+#         name='Stamen Toner',
+#         overlay=False,
+#         control=True
+#     ).add_to(m)
+
+#     # Add layer control
+#     folium.LayerControl().add_to(m)
+
+#     # Save the map as an HTML file
+#     map_filename = "static/map_with_metadata.html"
+#     m.save(map_filename)
+
+#     return FileResponse(map_filename, media_type='text/html')
+
+
+## Temperature Working
 @app.post("/generate-map/")
 async def generate_map(request: AoiRequest):
     aoi = ee.Geometry.Point([request.lon, request.lat])
@@ -138,16 +261,27 @@ async def generate_map(request: AoiRequest):
             control=True
         ).add_to(m)
 
-    # Experimenting with auto-scaling or setting reasonable min/max values
-    vis_params = {
+    # Visualization parameters for RGB (B4, B3, B2)
+    vis_params_rgb = {
         'bands': ['B4', 'B3', 'B2'],  # RGB bands
-        'min': 0,  # Adjusted to minimum reflectance values
-        'max': 0.3,  # Adjusted for TOA reflectance images
+        'min': 0,
+        'max': 0.3,
         'gamma': 1.4
     }
 
-    # Add the Landsat image layer to the Folium map
-    add_ee_layer(img, vis_params, 'Landsat 8 RGB')
+    # Visualization parameters for Temperature (B10)
+    vis_params_temperature = {
+        'bands': ['B10'],  # Band 10 is for temperature
+        'min': 290,  # Adjust min value based on expected temperature in Kelvin
+        'max': 320,  # Adjust max value based on expected temperature in Kelvin
+        'palette': ['blue', 'green', 'yellow', 'red']  # Color palette for temperature
+    }
+
+    # Add the Landsat RGB layer to the Folium map
+    add_ee_layer(img, vis_params_rgb, 'Landsat 8 RGB')
+
+    # Add the temperature layer (Band 10) to the Folium map
+    add_ee_layer(img, vis_params_temperature, 'Landsat 8 Temperature (B10)')
 
     # Add the AOI to the map
     folium.Marker(location=[request.lat, request.lon], popup='AOI', icon=folium.Icon(color='red')).add_to(m)
@@ -185,6 +319,202 @@ async def generate_map(request: AoiRequest):
     m.save(map_filename)
 
     return FileResponse(map_filename, media_type='text/html')
+
+## dibujo de un cuadrardo
+# @app.post("/generate-map/")
+# async def generate_map(request: AoiRequest):
+#     # Step 1: Create the point (AOI) with latitude and longitude
+#     aoi = ee.Geometry.Point([request.lon, request.lat])
+    
+#     # Step 2: Create a 90m x 90m square around the AOI
+#     square = aoi.buffer(45).bounds()  # 45 meters buffer on each side (half of 90m)
+
+#     # Fetch Landsat 8 TOA images and filter by date and region
+#     landsat_collection = ee.ImageCollection('LANDSAT/LC08/C02/T1_TOA') \
+#         .filterDate(request.start_date, request.end_date) \
+#         .filterBounds(aoi)
+    
+#     # Get the first image in the collection for visualization
+#     img = landsat_collection.first()
+
+#     # Get metadata from the first image
+#     img_info = img.getInfo()
+#     properties = img_info.get('properties', {})
+
+#     # Create a new dictionary without underscores in the keys
+#     cleaned_properties = {key.replace('_', ' '): value for key, value in properties.items()}
+
+#     # Save metadata to JSON file
+#     with open('static/metadata.json', 'w') as json_file:
+#         json.dump(cleaned_properties, json_file, indent=4)
+
+#     # Extract 5 key metadata items relevant to scientific analysis
+#     relevant_metadata = {
+#         'Cloud Coverage': properties.get('CLOUD_COVER', 'N/A'),
+#         'Sun Azimuth': properties.get('SUN_AZIMUTH', 'N/A'),
+#         'Sun Elevation': properties.get('SUN_ELEVATION', 'N/A'),
+#         'Earth-Sun Distance': properties.get('EARTH_SUN_DISTANCE', 'N/A'),
+#         'Sensor Angle': properties.get('SENSOR_AZIMUTH', 'N/A')
+#     }
+
+#     # Create a Folium map centered on the AOI
+#     map_center = [request.lat, request.lon]
+#     m = folium.Map(location=map_center, zoom_start=8)
+
+#     # Function to add Earth Engine image to folium map
+#     def add_ee_layer(image, vis_params, name):
+#         map_id_dict = ee.Image(image).getMapId(vis_params)
+#         folium.TileLayer(
+#             tiles=map_id_dict['tile_fetcher'].url_format,
+#             attr='Google Earth Engine',
+#             name=name,
+#             overlay=True,
+#             control=True
+#         ).add_to(m)
+
+#     # Experimenting with auto-scaling or setting reasonable min/max values
+#     vis_params = {
+#         'bands': ['B4', 'B3', 'B2'],  # RGB bands
+#         'min': 0,  # Adjusted to minimum reflectance values
+#         'max': 0.3,  # Adjusted for TOA reflectance images
+#         'gamma': 1.4
+#     }
+
+#     # Add the Landsat image layer to the Folium map
+#     add_ee_layer(img, vis_params, 'Landsat 8 RGB')
+
+#     # Add the AOI point to the map
+#     folium.Marker(location=[request.lat, request.lon], popup='AOI', icon=folium.Icon(color='red')).add_to(m)
+
+#     # Add the square (buffered geometry) to the map
+#     geo_json = folium.GeoJson(square.getInfo(), name="90m x 90m AOI", style_function=lambda x: {
+#         'fillColor': 'yellow',
+#         'color': 'yellow',
+#         'weight': 2,
+#         'dashArray': '5, 5'
+#     })
+#     geo_json.add_to(m)
+
+#     # Add relevant metadata as a popup on the map
+#     metadata_html = "<b>Landsat 8 Metadata<br>(Scientific Analysis):</b><br>"
+#     for key, value in relevant_metadata.items():
+#         metadata_html += f"{key}: {value}<br>"
+
+#     metadata_popup = folium.Popup(html=metadata_html, max_width=300)
+#     folium.Marker(location=map_center, popup=metadata_popup).add_to(m)
+
+#     # Add base layers for context with attribution
+#     folium.TileLayer(
+#         tiles='Stamen Terrain',
+#         attr='Map data © OpenStreetMap contributors, CC-BY-SA, Stamen Design',
+#         name='Stamen Terrain',
+#         overlay=False,
+#         control=True
+#     ).add_to(m)
+
+#     folium.TileLayer(
+#         tiles='Stamen Toner',
+#         attr='Map data © OpenStreetMap contributors, CC-BY-SA, Stamen Design',
+#         name='Stamen Toner',
+#         overlay=False,
+#         control=True
+#     ).add_to(m)
+
+#     # Add layer control
+#     folium.LayerControl().add_to(m)
+
+#     # Save the map as an HTML file
+#     map_filename = "static/map_with_metadata.html"
+#     m.save(map_filename)
+
+#     return FileResponse(map_filename, media_type='text/html')
+
+# ## Pick only a pixel
+# @app.post("/generate-map/")
+# async def generate_map(request: AoiRequest):
+#     # Step 1: Create the point (AOI) with latitude and longitude
+#     aoi = ee.Geometry.Point([request.lon, request.lat])
+    
+#     # Fetch Landsat 8 TOA images and filter by date and region
+#     landsat_collection = ee.ImageCollection('LANDSAT/LC08/C02/T1_TOA') \
+#         .filterDate(request.start_date, request.end_date) \
+#         .filterBounds(aoi)
+    
+#     # Get the first image in the collection
+#     img = landsat_collection.first()
+
+#     # Get metadata from the first image
+#     img_info = img.getInfo()
+#     properties = img_info.get('properties', {})
+
+#     # Save metadata to JSON file
+#     with open('static/metadata.json', 'w') as json_file:
+#         json.dump(properties, json_file, indent=4)
+
+#     # Step 2: Extract pixel value at the AOI point
+#     pixel_value = img.reduceRegion(
+#         reducer=ee.Reducer.mean(),
+#         geometry=aoi,
+#         scale=30  # Landsat 8 resolution is 30m per pixel
+#     ).getInfo()
+
+#     # Step 3: Create a Folium map centered on the AOI
+#     map_center = [request.lat, request.lon]
+#     m = folium.Map(location=map_center, zoom_start=15)
+
+#     # Function to add Earth Engine image to folium map
+#     def add_ee_layer(image, vis_params, name):
+#         map_id_dict = ee.Image(image).getMapId(vis_params)
+#         folium.TileLayer(
+#             tiles=map_id_dict['tile_fetcher'].url_format,
+#             attr='Google Earth Engine',
+#             name=name,
+#             overlay=True,
+#             control=True
+#         ).add_to(m)
+
+#     # Visualize the Landsat 8 RGB bands
+#     vis_params = {
+#         'bands': ['B4', 'B3', 'B2'],  # RGB bands
+#         'min': 0,
+#         'max': 0.3,
+#         'gamma': 1.4
+#     }
+
+#     # Add the Landsat image to the Folium map
+#     add_ee_layer(img, vis_params, 'Landsat 8 RGB')
+
+#     # Step 4: Add a marker for the single pixel with its value
+#     pixel_popup_html = f"<b>Pixel Value at AOI</b><br>{pixel_value}"
+#     pixel_popup = folium.Popup(pixel_popup_html, max_width=300)
+
+#     folium.Marker(location=[request.lat, request.lon], popup=pixel_popup, icon=folium.Icon(color='blue')).add_to(m)
+
+#     # Add base layers for context
+#     folium.TileLayer(
+#         tiles='Stamen Terrain',
+#         attr='Map data © OpenStreetMap contributors, CC-BY-SA, Stamen Design',
+#         name='Stamen Terrain',
+#         overlay=False,
+#         control=True
+#     ).add_to(m)
+
+#     folium.TileLayer(
+#         tiles='Stamen Toner',
+#         attr='Map data © OpenStreetMap contributors, CC-BY-SA, Stamen Design',
+#         name='Stamen Toner',
+#         overlay=False,
+#         control=True
+#     ).add_to(m)
+
+#     # Add layer control
+#     folium.LayerControl().add_to(m)
+
+#     # Save the map as an HTML file
+#     map_filename = "static/map_with_single_pixel.html"
+#     m.save(map_filename)
+
+#     return FileResponse(map_filename, media_type='text/html')
 
 
 # Landsat 8 Band Wavelengths (in micrometers)
